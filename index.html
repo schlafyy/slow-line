@@ -40,6 +40,8 @@
   --line: var(--H);
   --ground: #f4f2ec; --sign: #ffffff; --ink: #1e1f22; --muted: #5b5850; --rule: #dad6cc;
   --sans: Hind, system-ui, sans-serif;
+  /* the phone's own Japanese faces: Hiragino on iPhone, the family real signage uses */
+  --ja: 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI', 'Yu Gothic', Meiryo, 'Noto Sans JP', sans-serif;
   --serif: 'Source Serif 4', serif; /* not Georgia: it draws Greek ὸ and Latin ḕ as a letter plus a floating accent */
   --gutter: max(1.25rem, env(safe-area-inset-left));
   /* sign and text share one column edge, centred on wide screens */
@@ -109,13 +111,19 @@ h1 {
   margin: 0; font-weight: 700; font-size: clamp(1.7rem, 7.2vw, 2.6rem); line-height: 1.08;
   letter-spacing: -.01em; text-wrap: balance; overflow-wrap: anywhere;
 }
+.ja { font-family: var(--ja); font-weight: 600; letter-spacing: .06em; }
+.sign-ja { margin: 0 0 .3rem; font-size: 1rem; line-height: 1.3; }
+.sign-sub .ja { display: block; font-size: .85em; margin-bottom: .15rem; }
 .sign-sub { margin: .3rem 0 0; font-weight: 500; font-size: 1.05rem; line-height: 1.25; color: var(--muted); }
 
 .band {
   display: flex; justify-content: space-between; gap: 1rem;
   background: var(--line); color: #fff;
   padding: 0 var(--inset); min-height: 2.9rem;
+  /* the band points both ways, like the line on a station sign; flat at the start of an article */
+  clip-path: polygon(0 50%, .9rem 0, calc(100% - .9rem) 0, 100% 50%, calc(100% - .9rem) 100%, .9rem 100%);
 }
+.band.terminus { clip-path: polygon(0 0, calc(100% - .9rem) 0, 100% 50%, calc(100% - .9rem) 100%, 0 100%); }
 .band > * {
   display: flex; align-items: center; gap: .5rem; min-width: 0; max-width: 50%;
   font-weight: 500; font-size: .95rem; line-height: 1.2;
@@ -207,6 +215,8 @@ h1 {
 .next-face .badge { width: 3rem; height: 3rem; border-width: 4px; }
 .next-face .badge-line { font-size: .78rem; }
 .next-face .badge-no { font-size: 1.25rem; }
+/* つぎは (next) set vertically beside the badge, as Japanese text runs on narrow signs */
+.tsugi { writing-mode: vertical-rl; font-family: var(--ja); font-weight: 600; font-size: .72rem; line-height: 1; letter-spacing: .1em; color: var(--muted); margin-left: -.4rem; }
 .next-name { font-weight: 700; font-size: 1.45rem; line-height: 1.12; text-wrap: balance; overflow-wrap: anywhere; }
 .next-band {
   display: flex; align-items: center; justify-content: space-between; gap: 1rem;
@@ -226,6 +236,8 @@ h1 {
   padding: .8rem .4rem; border: 1px solid var(--rule); border-radius: .5rem; background: var(--sign);
   font-weight: 500; font-size: .95rem;
 }
+.transfer-chip .ja { font-size: .8rem; margin-bottom: -.4rem; color: var(--muted); }
+.transfer-title .ja { font-size: .85em; margin-right: .3em; }
 .transfer-chip .badge { width: 2.6rem; height: 2.6rem; border-width: 4px; }
 .transfer-chip .badge-line { font-size: .7rem; }
 .transfer-chip .badge-no { font-size: 1.05rem; }

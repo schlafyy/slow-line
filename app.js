@@ -6,10 +6,10 @@ const WPM = 230;
 
 // Each topic is a line. Members of these WikiProject assessment categories are Talk: pages.
 const LINES = {
-  H: { name: 'History', cats: ['FA-Class history articles', 'GA-Class history articles', 'FA-Class military history articles', 'GA-Class military history articles'] },
-  J: { name: 'Japan', cats: ['FA-Class Japanese military history articles', 'GA-Class Japanese military history articles', 'FA-Class Japan-related articles'] },
-  S: { name: 'Science', cats: ['FA-Class physics articles', 'GA-Class physics articles', 'FA-Class Astronomy articles', 'GA-Class Astronomy articles', 'FA-Class Chemistry articles'] },
-  C: { name: 'Cars', cats: ['FA-Class Automobile articles', 'GA-Class Automobile articles', 'FA-Class motorsport articles', 'GA-Class motorsport articles', 'FA-Class Formula One articles', 'GA-Class Formula One articles'] },
+  H: { name: 'History', ja: '歴史', cats: ['FA-Class history articles', 'GA-Class history articles', 'FA-Class military history articles', 'GA-Class military history articles'] },
+  J: { name: 'Japan', ja: '日本', cats: ['FA-Class Japanese military history articles', 'GA-Class Japanese military history articles', 'FA-Class Japan-related articles'] },
+  S: { name: 'Science', ja: '科学', cats: ['FA-Class physics articles', 'GA-Class physics articles', 'FA-Class Astronomy articles', 'GA-Class Astronomy articles', 'FA-Class Chemistry articles'] },
+  C: { name: 'Cars', ja: '車', cats: ['FA-Class Automobile articles', 'GA-Class Automobile articles', 'FA-Class motorsport articles', 'GA-Class motorsport articles', 'FA-Class Formula One articles', 'GA-Class Formula One articles'] },
 };
 
 const END_SECTIONS = /^(see also|notes|references|footnotes|citations|sources|bibliography|further reading|external links|works cited|notes and references|explanatory notes|cited sources|general and cited sources|primary sources|secondary sources)$/i;
@@ -138,10 +138,12 @@ function boot() {
     for (let i = 0; i < 3; i++) {
       const title = await pickTitle(code);
       seen(title);
-      const d = await wiki({ action: 'parse', page: title, prop: 'text|revid', redirects: '1', disableeditsection: '1', disabletoc: '1' });
+      const d = await wiki({ action: 'parse', page: title, prop: 'text|revid|langlinks', redirects: '1', disableeditsection: '1', disabletoc: '1' });
       const chapters = splitChapters(toBlocks(d.parse.text));
       if (chapters.reduce((n, c) => n + c.words, 0) < 600) continue; // under ~3 minutes is a post, not a chapter
-      const a = { title: d.parse.title, revid: d.parse.revid, chapters };
+      // the Japanese Wikipedia title, shown like the kanji line on a station sign; none when there is no Japanese article
+      const ja = (d.parse.langlinks || []).find(l => l.lang === 'ja')?.title.replace(/\s*[（(][^（()）]*[）)]$/, '') || null;
+      const a = { title: d.parse.title, revid: d.parse.revid, ja, chapters };
       seen(a.title);
       putArticle(a);
       return a.title;
@@ -193,10 +195,11 @@ function boot() {
   const station = (a, i) => i === 0 ? a.title : a.chapters[i].label;
   const transfers = (code, savedOnly) => Object.entries(LINES)
     .filter(([c]) => c !== code && (!savedOnly || article(state.lines[c]?.title)))
-    .map(([c, l]) => `<button class="transfer-chip" data-act="line" data-code="${c}" data-line="${c}">${badge(c, pad(state.lines[c]?.no || 1))}<span>${l.name}</span></button>`).join('');
+    .map(([c, l]) => `<button class="transfer-chip" data-act="line" data-code="${c}" data-line="${c}">${badge(c, pad(state.lines[c]?.no || 1))}<span class="ja" lang="ja">${l.ja}</span><span>${l.name}</span></button>`).join('');
 
   function paintStatus(code, title, sub, problem) {
     $('#sign-face').innerHTML = `${badge(code, '··')}<div class="sign-name"><h1>${esc(title)}</h1><p class="sign-sub">${esc(sub)}</p></div>`;
+    $('#band').classList.add('terminus');
     $('#band').innerHTML = `<span class="band-prev">${arrow('left')}<span>${LINES[code].name} line</span></span>`;
     $('#fine').innerHTML = '';
     $('#text').innerHTML = problem ? `<p class="status">${esc(problem)}</p>` : '';
@@ -220,7 +223,11 @@ function boot() {
     sign.classList.remove('arriving');
     if (arriving && !matchMedia('(prefers-reduced-motion: reduce)').matches) { void sign.offsetWidth; sign.classList.add('arriving'); }
 
-    $('#sign-face').innerHTML = `${badge(code, pad(ln.no))}<div class="sign-name"><h1>${esc(name)}</h1><p class="sign-sub">${esc(ln.ch === 0 ? 'Opening' : a.title)}</p></div>`;
+    const ja = a.ja ? `<span class="ja" lang="ja">${esc(a.ja)}</span>` : '';
+    $('#sign-face').innerHTML = `${badge(code, pad(ln.no))}<div class="sign-name">` +
+      (ln.ch === 0 ? `${ja ? `<p class="sign-ja">${ja}</p>` : ''}<h1>${esc(name)}</h1><p class="sign-sub">Opening</p>`
+                   : `<h1>${esc(name)}</h1><p class="sign-sub">${ja} ${esc(a.title)}</p>`) + '</div>';
+    $('#band').classList.toggle('terminus', !prev);
     $('#band').innerHTML =
       `<button class="band-prev" data-act="prev" ${prev ? '' : 'disabled'}>${arrow('left')}${prev ? badge(code, pad(ln.no - 1), 'mini') : ''}<span>${esc(prev || LINES[code].name + ' line')}</span></button>` +
       `<button class="band-next" data-act="next"><span>${esc(nextName)}</span>${badge(code, pad(ln.no + 1), 'mini')}${arrow('right')}</button>`;
@@ -247,11 +254,11 @@ function boot() {
       <p class="here-note">You are at part ${ln.ch + 1} of ${a.chapters.length}</p>
       <ol class="diagram" style="--done: ${done}%" aria-hidden="true">${diagram}</ol>
       <button class="next-sign" data-act="next" ${ready ? '' : 'aria-disabled="true"'}>
-        <span class="next-face">${badge(code, pad(ln.no + 1))}<span class="next-name">${esc(name)}</span></span>
+        <span class="next-face">${badge(code, pad(ln.no + 1))}<span class="tsugi" lang="ja">つぎは</span><span class="next-name">${esc(name)}</span></span>
         <span class="next-band"><span>${esc(band)}</span>${arrow('right')}</span>
       </button>
       ${last ? '' : '<button class="quiet" data-act="skip">Leave this article for a new one</button>'}
-      <h2 class="transfer-title">Transfer</h2>
+      <h2 class="transfer-title"><span class="ja" lang="ja">のりかえ</span> Transfer</h2>
       <div class="transfer">${transfers(code, false)}</div>`;
   }
 
