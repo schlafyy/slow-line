@@ -9,7 +9,7 @@ const LINES = {
   H: { name: 'History', ja: '歴史', cats: ['FA-Class history articles', 'GA-Class history articles', 'FA-Class military history articles', 'GA-Class military history articles'] },
   J: { name: 'Japan', ja: '日本', cats: ['FA-Class Japanese military history articles', 'GA-Class Japanese military history articles', 'FA-Class Japan-related articles'] },
   S: { name: 'Science', ja: '科学', cats: ['FA-Class physics articles', 'GA-Class physics articles', 'FA-Class Astronomy articles', 'GA-Class Astronomy articles', 'FA-Class Chemistry articles'] },
-  C: { name: 'Cars', ja: '車', cats: ['FA-Class Automobile articles', 'GA-Class Automobile articles', 'FA-Class motorsport articles', 'GA-Class motorsport articles', 'FA-Class Formula One articles', 'GA-Class Formula One articles'] },
+  C: { name: 'Cars', ja: '車', cats: ['FA-Class Automobile articles', 'GA-Class Automobile articles', 'FA-Class motorsport articles', 'GA-Class motorsport articles', 'FA-Class Formula One articles', 'GA-Class Formula One articles', 'FA-Class NASCAR articles', 'GA-Class NASCAR articles'] },
 };
 
 const END_SECTIONS = /^(see also|notes|references|footnotes|citations|sources|bibliography|further reading|external links|works cited|notes and references|explanatory notes|cited sources|general and cited sources|primary sources|secondary sources)$/i;
@@ -49,6 +49,34 @@ function boot() {
   const KEEP = { I: 'i', B: 'b', EM: 'em', STRONG: 'strong', SUB: 'sub', SUP: 'sup', BR: 'br', Q: 'q', CITE: 'cite', ABBR: 'abbr', SMALL: 'small', VAR: 'var', P: 'p', UL: 'ul', OL: 'ol', LI: 'li', DD: 'p', DT: 'p' };
   const DROP = 'style, script, link, meta, img, figure, table, .reference, .mw-ref, .noprint, .mw-editsection, .mwe-math-fallback-image-inline, .mwe-math-fallback-image-display, annotation, annotation-xml, .error, .sortkey, .mw-empty-elt';
   const BLOCK = { P: 'p', UL: 'ul', OL: 'ol', BLOCKQUOTE: 'blockquote', DL: 'div' };
+  const IMG_HOSTS = new Set(['upload.wikimedia.org', 'thumb.wikimedia.org']);
+
+  // A picture as a block with no words: Wikipedia's own 2x size from its srcset (so the URL always exists) and the
+  // caption, rebuilt like the text. Only https images from Wikimedia; icons, flags and tiny maps are left out.
+  // shortcut: credit is the article link at the end (each file's author is on its page there), not per picture
+  function figure(img, cap) {
+    if (!img || +img.getAttribute('width') < 120 || +img.getAttribute('height') < 80) return null;
+    const best = (img.getAttribute('srcset') || '').split(',').map(s => s.trim().split(/\s+/)[0]).filter(Boolean).pop() || img.getAttribute('src');
+    let url;
+    try { url = new URL(best, 'https://en.wikipedia.org'); } catch { return null; }
+    if (url.protocol !== 'https:' || !IMG_HOSTS.has(url.hostname)) return null;
+    url.search = ''; // tracking tags only
+    const f = document.createElement('figure'), el = document.createElement('img');
+    el.src = url.href;
+    el.alt = img.getAttribute('alt') || '';
+    el.width = +img.getAttribute('width');
+    el.height = +img.getAttribute('height');
+    el.loading = 'lazy';
+    el.decoding = 'async';
+    el.crossOrigin = 'anonymous'; // a CORS response, so the service worker can keep it for offline
+    f.append(el);
+    if (cap) {
+      const c = document.createElement('figcaption');
+      c.append(clean(cap));
+      if (c.textContent.trim()) f.append(c);
+    }
+    return { html: f.outerHTML, w: 0, img: url.href };
+  }
 
   // Wikipedia HTML is untrusted: rebuild it from allowlisted tags with no attributes, unwrapping the rest.
   function clean(src) {
@@ -78,6 +106,16 @@ function boot() {
       const h = n.matches('.mw-heading') ? n.querySelector('h2, h3, h4') : n.matches('h2, h3, h4') ? n : null;
       if (h) {
         blocks.push({ h: +h.localName[1], text: h.textContent.trim().normalize('NFC') });
+        continue;
+      }
+      if (n.matches('figure[typeof~="mw:File/Thumb"], figure[typeof~="mw:File/Frame"]')) {
+        const f = figure(n.querySelector('img'), n.querySelector('figcaption'));
+        if (f) blocks.push(f);
+        continue;
+      }
+      if (n.matches('table.infobox')) { // the infobox itself is dropped; its picture leads the article
+        const f = figure(n.querySelector('.infobox-image img'), n.querySelector('.infobox-caption'));
+        if (f) blocks.push(f);
         continue;
       }
       const tag = BLOCK[n.tagName];
@@ -146,6 +184,7 @@ function boot() {
       const a = { title: d.parse.title, revid: d.parse.revid, ja, chapters };
       seen(a.title);
       putArticle(a);
+      warmImages(a);
       return a.title;
     }
     throw new Error('Wikipedia sent only short articles. Try again.');
@@ -170,11 +209,21 @@ function boot() {
   function dropArticle(t) { mem.delete(t); try { localStorage.removeItem('a:' + t); } catch {} }
   function line(code) { return (state.lines[code] ||= { no: 1, title: null, ch: 0, next: null, y: 0 }); }
 
-  // forget stored articles no line points at any more
+  const imagesOf = a => a ? a.chapters.flatMap(c => c.blocks.map(b => b.img).filter(Boolean)) : [];
+  // one at a time through the service worker, which keeps them (see sw.js)
+  function warmImages(a) {
+    imagesOf(a).reduce((p, u) => p.then(() => fetch(u, { mode: 'cors' }).catch(() => {})), Promise.resolve());
+  }
+
+  // forget stored articles no line points at any more, and their pictures
   try {
     const keep = new Set(Object.values(state.lines).flatMap(l => [l.title, l.next]));
     for (const k of Object.keys(localStorage)) if (k.startsWith('a:') && !keep.has(k.slice(2))) localStorage.removeItem(k);
+    const want = new Set([...keep].flatMap(t => imagesOf(article(t))));
+    caches.open('slowline-img').then(async c => { for (const r of await c.keys()) if (!want.has(r.url)) c.delete(r); }).catch(() => {});
   } catch {}
+  // a picture that can't load (offline, never kept) goes, caption and all, instead of leaving a broken box
+  document.addEventListener('error', e => { if (e.target.tagName === 'IMG') e.target.closest('figure')?.remove(); }, true);
 
   // ---------- rendering ----------
 

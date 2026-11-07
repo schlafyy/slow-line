@@ -50,7 +50,8 @@
   color-scheme: light dark;
 }
 @media (prefers-color-scheme: dark) {
-  :root { --ground: #121316; --sign: #1c1e22; --ink: #e6e3dc; --muted: #a29e95; --rule: #34363b; }
+  /* Science's blue a step lighter: its strokes reach 3.29:1 on the dark sign, white text on it stays 5.07:1 */
+  :root { --ground: #121316; --sign: #1c1e22; --ink: #e6e3dc; --muted: #a29e95; --rule: #34363b; --S: #1a6fc7; }
 }
 [data-line=H] { --line: var(--H); } [data-line=J] { --line: var(--J); } [data-line=S] { --line: var(--S); } [data-line=C] { --line: var(--C); }
 
@@ -173,6 +174,10 @@ h1 {
 .text .indent { margin: 0 0 1em 1.3em; }
 .text sup, .text sub { line-height: 0; }
 .text math[display=block] { display: block; margin: 1em 0; overflow-x: auto; }
+.text figure { margin: 1.6em 0; }
+/* full column width; a tall portrait stops at most of the screen, centred */
+.text figure img { display: block; width: 100%; height: auto; max-height: 70vh; object-fit: contain; border-radius: 4px; }
+.text figcaption { font-family: var(--sans); font-size: .86rem; line-height: 1.4; color: var(--muted); margin-top: .5rem; }
 .status { font-family: var(--sans); font-size: 1.05rem; color: var(--muted); margin: 0 0 1rem; }
 
 /* ---------- arriving at the end of a chapter ---------- */
